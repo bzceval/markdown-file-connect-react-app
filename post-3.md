@@ -2,10 +2,10 @@
 title: "Yes, Transformers are Effective for Time Series Forecasting (+ Autoformer)"
 thumbnail: /blog/assets/150_autoformer/thumbnail.png
 authors:
-- user: elisim
-  guest: true
-- user: kashif
-- user: nielsr
+  - user: elisim
+    guest: true
+  - user: kashif
+  - user: nielsr
 ---
 
 # Yes, Transformers are Effective for Time Series Forecasting (+ Autoformer)
@@ -21,7 +21,7 @@ authors:
 
 ## Introduction
 
-A few months ago, we introduced the [Informer](https://huggingface.co/blog/informer) model ([Zhou, Haoyi, et al., 2021](https://arxiv.org/abs/2012.07436)), which is a Time Series Transformer that won the AAAI 2021 best paper award. We also provided an example for multivariate probabilistic forecasting with Informer. In this post, we discuss the question: [Are Transformers Effective for Time Series Forecasting?](https://arxiv.org/abs/2205.13504) (AAAI 2023). As we will see, they are. 
+A few months ago, we introduced the [Informer](https://huggingface.co/blog/informer) model ([Zhou, Haoyi, et al., 2021](https://arxiv.org/abs/2012.07436)), which is a Time Series Transformer that won the AAAI 2021 best paper award. We also provided an example for multivariate probabilistic forecasting with Informer. In this post, we discuss the question: [Are Transformers Effective for Time Series Forecasting?](https://arxiv.org/abs/2205.13504) (AAAI 2023). As we will see, they are.
 
 Firstly, we will provide empirical evidence that **Transformers are indeed Effective for Time Series Forecasting**. Our comparison shows that the simple linear model, known as _DLinear_, is not better than Transformers as claimed. When compared against equivalent sized models in the same setting as the linear models, the Transformer-based models perform better on the test set metrics we consider.
 Afterwards, we will introduce the _Autoformer_ model ([Wu, Haixu, et al., 2021](https://arxiv.org/abs/2106.13008)), which was published in NeurIPS 2021 after the Informer model. The Autoformer model is [now available](https://huggingface.co/docs/transformers/main/en/model_doc/autoformer) in 🤗 Transformers. Finally, we will discuss the _DLinear_ model, which is a simple feedforward network that uses the decomposition layer from Autoformer. The DLinear model was first introduced in [Are Transformers Effective for Time Series Forecasting?](https://arxiv.org/abs/2205.13504) and claimed to outperform Transformer-based models in time-series forecasting.
@@ -29,46 +29,49 @@ Afterwards, we will introduce the _Autoformer_ model ([Wu, Haixu, et al., 2021](
 Let's go!
 
 ## Benchmarking - Transformers vs. DLinear
+
 In the paper [Are Transformers Effective for Time Series Forecasting?](https://arxiv.org/abs/2205.13504), published recently in AAAI 2023,
-the authors claim that Transformers are not effective for time series forecasting. They compare the Transformer-based models against a simple linear model, which they call _DLinear_. 
+the authors claim that Transformers are not effective for time series forecasting. They compare the Transformer-based models against a simple linear model, which they call _DLinear_.
 The DLinear model uses the decomposition layer from the Autoformer model, which we will introduce later in this post. The authors claim that the DLinear model outperforms the Transformer-based models in time-series forecasting.
 Is that so? Let's find out.
 
-|      Dataset      | Autoformer (uni.) MASE | DLinear  MASE |
-|:-----------------:|:----------------------:|:-------------:|
-|    `Traffic` 	    |         0.910          |     0.965     |
-| `Exchange-Rate` 	 |         1.087          |     1.690     |
-|  `Electricity` 	  |         0.751          |     0.831     |
+|     Dataset     | Autoformer (uni.) MASE | DLinear MASE |
+| :-------------: | :--------------------: | :----------: |
+|    `Traffic`    |         0.910          |    0.965     |
+| `Exchange-Rate` |         1.087          |    1.690     |
+|  `Electricity`  |         0.751          |    0.831     |
 
 The table above shows the results of the comparison between the Autoformer and DLinear models on the three datasets used in the paper.  
 The results show that the Autoformer model outperforms the DLinear model on all three datasets.
 
 Next, we will present the new Autoformer model along with the DLinear model. We will showcase how to compare them on the Traffic dataset from the table above, and provide explanations for the results we obtained.
 
-**TL;DR:** A simple linear model, while advantageous in certain cases, has no capacity to incorporate covariates compared to more complex models like transformers in the univariate setting. 
+**TL;DR:** A simple linear model, while advantageous in certain cases, has no capacity to incorporate covariates compared to more complex models like transformers in the univariate setting.
 
 ## Autoformer - Under The Hood
 
-Autoformer builds upon the traditional method of decomposing time series into seasonality and trend-cycle components. This is achieved through the incorporation of a _Decomposition Layer_, which enhances the model's ability to capture these components accurately. Moreover, Autoformer introduces an innovative auto-correlation mechanism that replaces the standard self-attention used in the vanilla transformer. This mechanism enables the model to utilize period-based dependencies in the attention, thus improving the overall performance. 
+Autoformer builds upon the traditional method of decomposing time series into seasonality and trend-cycle components. This is achieved through the incorporation of a _Decomposition Layer_, which enhances the model's ability to capture these components accurately. Moreover, Autoformer introduces an innovative auto-correlation mechanism that replaces the standard self-attention used in the vanilla transformer. This mechanism enables the model to utilize period-based dependencies in the attention, thus improving the overall performance.
 
 In the upcoming sections, we will delve into the two key contributions of Autoformer: the _Decomposition Layer_ and the _Attention (Autocorrelation) Mechanism_. We will also provide code examples to illustrate how these components function within the Autoformer architecture.
 
 ### Decomposition Layer
+
 Decomposition has long been a popular method in time series analysis, but it had not been extensively incorporated into deep learning models until the introduction of the Autoformer paper. Following a brief explanation of the concept, we will demonstrate how the idea is applied in Autoformer using PyTorch code.
 
-####  Decomposition of Time Series
-In time series analysis, [decomposition](https://en.wikipedia.org/wiki/Decomposition_of_time_series) is a method of breaking down a time series into three systematic components: trend-cycle, seasonal variation, and random fluctuations.
-The trend component represents the long-term direction of the time series, which can be increasing, decreasing, or stable over time. The seasonal component represents the recurring patterns that occur within the time series, such as yearly or quarterly cycles. Finally, the random (sometimes called "irregular") component represents the random noise in the data that cannot be explained by the trend or seasonal components. 
+#### Decomposition of Time Series
 
-Two main types of decomposition are additive and multiplicative decomposition, which are implemented in the [great statsmodels library](https://www.statsmodels.org/dev/generated/statsmodels.tsa.seasonal.seasonal_decompose.html). By decomposing a time series into these components, we can better understand and model the underlying patterns in the data. 
+In time series analysis, [decomposition](https://en.wikipedia.org/wiki/Decomposition_of_time_series) is a method of breaking down a time series into three systematic components: trend-cycle, seasonal variation, and random fluctuations.
+The trend component represents the long-term direction of the time series, which can be increasing, decreasing, or stable over time. The seasonal component represents the recurring patterns that occur within the time series, such as yearly or quarterly cycles. Finally, the random (sometimes called "irregular") component represents the random noise in the data that cannot be explained by the trend or seasonal components.
+
+Two main types of decomposition are additive and multiplicative decomposition, which are implemented in the [great statsmodels library](https://www.statsmodels.org/dev/generated/statsmodels.tsa.seasonal.seasonal_decompose.html). By decomposing a time series into these components, we can better understand and model the underlying patterns in the data.
 
 But how can we incorporate decomposition into the Transformer architecture? Let's see how Autoformer does it.
 
 #### Decomposition in Autoformer
 
 | ![autoformer_architecture](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/blog/148_autoformer/autoformer_architecture.png) |
-|:--:|
-| Autoformer architecture from [the paper](https://arxiv.org/abs/2106.13008) |
+| :-------------------------------------------------------------------------------------------------------------------------------------------------------: |
+|                                        Autoformer architecture from [the paper](https://arxiv.org/abs/2106.13008)                                         |
 
 Autoformer incorporates a decomposition block as an inner operation of the model, as presented in the Autoformer's architecture above. As can be seen, the encoder and decoder use a decomposition block to aggregate the trend-cyclical part and extract the seasonal part from the series progressively. The concept of inner decomposition has demonstrated its usefulness since the publication of Autoformer. Subsequently, it has been adopted in several other time series papers, such as FEDformer ([Zhou, Tian, et al., ICML 2022](https://arxiv.org/abs/2201.12740)) and DLinear [(Zeng, Ailing, et al., AAAI 2023)](https://arxiv.org/abs/2205.13504), highlighting its significance in time series modeling.
 
@@ -82,6 +85,7 @@ $$
 $$
 
 And the implementation in PyTorch:
+
 ```python
 import torch
 from torch import nn
@@ -94,7 +98,7 @@ class DecompositionLayer(nn.Module):
     def __init__(self, kernel_size):
         super().__init__()
         self.kernel_size = kernel_size
-        self.avg = nn.AvgPool1d(kernel_size=kernel_size, stride=1, padding=0) # moving average 
+        self.avg = nn.AvgPool1d(kernel_size=kernel_size, stride=1, padding=0) # moving average
 
     def forward(self, x):
         """Input shape: Batch x Time x EMBED_DIM"""
@@ -115,18 +119,18 @@ As you can see, the implementation is quite simple and can be used in other mode
 ### Attention (Autocorrelation) Mechanism
 
 | ![autoformer_autocorrelation_vs_full_attention](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/blog/148_autoformer/autoformer_autocorrelation_vs_full_attention.png) |
-|:--:|
-|  Vanilla self attention vs Autocorrelation mechanism, from [the paper](https://arxiv.org/abs/2106.13008) |
+| :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+|                                               Vanilla self attention vs Autocorrelation mechanism, from [the paper](https://arxiv.org/abs/2106.13008)                                               |
 
-In addition to the decomposition layer, Autoformer employs a novel auto-correlation mechanism which replaces the self-attention seamlessly. In the [vanilla Time Series Transformer](https://huggingface.co/docs/transformers/model_doc/time_series_transformer), attention weights are computed in the time domain and point-wise aggregated. On the other hand, as can be seen in the figure above, Autoformer computes them in the frequency domain (using [fast fourier transform](https://en.wikipedia.org/wiki/Fast_Fourier_transform)) and aggregates them by time delay. 
+In addition to the decomposition layer, Autoformer employs a novel auto-correlation mechanism which replaces the self-attention seamlessly. In the [vanilla Time Series Transformer](https://huggingface.co/docs/transformers/model_doc/time_series_transformer), attention weights are computed in the time domain and point-wise aggregated. On the other hand, as can be seen in the figure above, Autoformer computes them in the frequency domain (using [fast fourier transform](https://en.wikipedia.org/wiki/Fast_Fourier_transform)) and aggregates them by time delay.
 
 In the following sections, we will dive into these topics in detail and explain them with code examples.
 
-####  Frequency Domain Attention 
+#### Frequency Domain Attention
 
 | ![autoformer_autocorrelation_only_attention](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/blog/148_autoformer/autoformer_autocorrelation_only_attention.png) |
-|:--:|
-| Attention weights computation in frequency domain using FFT, from [the paper](https://arxiv.org/abs/2106.13008) |
+| :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+|                                        Attention weights computation in frequency domain using FFT, from [the paper](https://arxiv.org/abs/2106.13008)                                        |
 
 In theory, given a time lag \\(\tau\\), _autocorrelation_ for a single discrete variable \\(y\\) is used to measure the "relationship" (pearson correlation) between the variable's current value at time \\(t\\) to its past value at time \\(t-\tau\\):
 
@@ -138,23 +142,23 @@ Using autocorrelation, Autoformer extracts frequency-based dependencies from the
 
 In practice, autocorrelation of the queries and keys for **all lags** is calculated at once by FFT. By doing so, the autocorrelation mechanism achieves \\(O(L \log L)\\) time complexity (where \\(L\\) is the input time length), similar to [Informer's ProbSparse attention](https://huggingface.co/blog/informer#probsparse-attention). Note that the theory behind computing autocorrelation using FFT is based on the [Wiener–Khinchin theorem](https://en.wikipedia.org/wiki/Wiener%E2%80%93Khinchin_theorem), which is outside the scope of this blog post.
 
-Now, we are ready to see the code in PyTorch: 
+Now, we are ready to see the code in PyTorch:
 
 ```python
-import torch 
+import torch
 
 def autocorrelation(query_states, key_states):
     """
-    Computes autocorrelation(Q,K) using `torch.fft`. 
+    Computes autocorrelation(Q,K) using `torch.fft`.
     Think about it as a replacement for the QK^T in the self-attention.
-    
+
     Assumption: states are resized to same shape of [batch_size, time_length, embedding_dim].
     """
     query_states_fft = torch.fft.rfft(query_states, dim=1)
     key_states_fft = torch.fft.rfft(key_states, dim=1)
     attn_weights = query_states_fft * torch.conj(key_states_fft)
-    attn_weights = torch.fft.irfft(attn_weights, dim=1)  
-    
+    attn_weights = torch.fft.irfft(attn_weights, dim=1)
+
     return attn_weights
 ```
 
@@ -163,11 +167,12 @@ Quite simple! 😎 Please be aware that this is only a partial implementation of
 Next, we will see how to aggregate our `attn_weights` with the values by time delay, process which is termed as _Time Delay Aggregation_.
 
 #### Time Delay Aggregation
-| ![autoformer_autocorrelation_only_aggregation](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/blog/148_autoformer/autoformer_autocorrelation_only_aggregation.png) |
-|:--:|
-| Aggregation by time delay, from [the Autoformer paper](https://arxiv.org/abs/2106.13008) |
 
-Let's consider the autocorrelations (referred to as `attn_weights`) as \\(\mathcal{R_{Q,K}}\\). The question arises: how do we aggregate these \\(\mathcal{R_{Q,K}}(\tau_1), \mathcal{R_{Q,K}}(\tau_2), ..., \mathcal{R_{Q,K}}(\tau_k)\\) with \\(\mathcal{V}\\)? In the standard self-attention mechanism, this aggregation is accomplished through dot-product. However, in Autoformer, we employ a different approach. Firstly, we align \\(\mathcal{V}\\) by calculating its value for each time delay \\(\tau_1, \tau_2, ... \tau_k\\), which is also known as _Rolling_. Subsequently, we conduct element-wise multiplication between the aligned \\(\mathcal{V}\\) and the autocorrelations. In the provided figure, you can observe the left side showcasing the rolling of \\(\mathcal{V}\\) by time delay, while the right side illustrates the element-wise multiplication with the autocorrelations.
+| ![autoformer_autocorrelation_only_aggregation](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/blog/148_autoformer/autoformer_autocorrelation_only_aggregation.png) |
+| :-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+|                                                     Aggregation by time delay, from [the Autoformer paper](https://arxiv.org/abs/2106.13008)                                                      |
+
+Let's consider the autocorrelations (referred to as `attn_weights`) as \\(\mathcal{R*{Q,K}}\\). The question arises: how do we aggregate these \\(\mathcal{R*{Q,K}}(\tau*1), \mathcal{R*{Q,K}}(\tau*2), ..., \mathcal{R*{Q,K}}(\tau*k)\\) with \\(\mathcal{V}\\)? In the standard self-attention mechanism, this aggregation is accomplished through dot-product. However, in Autoformer, we employ a different approach. Firstly, we align \\(\mathcal{V}\\) by calculating its value for each time delay \\(\tau_1, \tau_2, ... \tau_k\\), which is also known as \_Rolling*. Subsequently, we conduct element-wise multiplication between the aligned \\(\mathcal{V}\\) and the autocorrelations. In the provided figure, you can observe the left side showcasing the rolling of \\(\mathcal{V}\\) by time delay, while the right side illustrates the element-wise multiplication with the autocorrelations.
 
 It can be summarized with the following equations:
 
@@ -190,7 +195,7 @@ def time_delay_aggregation(attn_weights, value_states, autocorrelation_factor=2)
     Computes aggregation as value_states.roll(delay) * top_k_autocorrelations(delay).
     The final result is the autocorrelation-attention output.
     Think about it as a replacement of the dot-product between attn_weights and value states.
-    
+
     The autocorrelation_factor is used to find top k autocorrelations delays.
     Assumption: value_states and attn_weights shape: [batch_size, time_length, embedding_dim]
     """
@@ -236,7 +241,7 @@ def forward(self, context):
     return seasonal_output + trend_output
 ```
 
-In the probabilistic setting one can project the context length arrays to  `prediction-length * hidden` dimensions via the `linear_seasonal` and `linear_trend` layers.  The resulting outputs are added and reshaped to `(prediction_length, hidden)`. Finally, a probabilistic head maps the latent representations of size `hidden` to the parameters of some distribution.
+In the probabilistic setting one can project the context length arrays to `prediction-length * hidden` dimensions via the `linear_seasonal` and `linear_trend` layers. The resulting outputs are added and reshaped to `(prediction_length, hidden)`. Finally, a probabilistic head maps the latent representations of size `hidden` to the parameters of some distribution.
 
 In our benchmark, we use the implementation of DLinear from [GluonTS](https://github.com/awslabs/gluonts).
 
@@ -322,7 +327,6 @@ Next, we define the transformations for the data, in particular for the creation
 We define a `Chain` of transformations from GluonTS (which is a bit comparable to `torchvision.transforms.Compose` for images). It allows us to combine several transformations into a single pipeline.
 
 The transformations below are annotated with comments to explain what they do. At a high level, we will iterate over the individual time series of our dataset and add/remove fields or features:
-
 
 ```python
 from transformers import PretrainedConfig
@@ -444,7 +448,6 @@ For training/validation/testing we next create an `InstanceSplitter` which is us
 
 The instance splitter samples random `context_length` sized and subsequent `prediction_length` sized windows from the data, and appends a `past_` or `future_` key to any temporal keys for the respective windows. This makes sure that the `values` will be split into `past_values` and subsequent `future_values` keys, which will serve as the encoder and decoder inputs respectively. The same happens for any keys in the `time_series_fields` argument:
 
-
 ```python
 from gluonts.transform import InstanceSplitter
 from gluonts.transform.sampler import InstanceSampler
@@ -484,7 +487,6 @@ def create_instance_splitter(
 ## Create PyTorch DataLoaders
 
 Next, it's time to create PyTorch DataLoaders, which allow us to have batches of (input, output) pairs - or in other words (`past_values`, `future_values`).
-
 
 ```python
 from typing import Iterable
@@ -585,7 +587,6 @@ def create_test_dataloader(
 
 We have already pre-trained an Autoformer model on this dataset, so we can just fetch the model and evaluate it on the test set:
 
-
 ```python
 from transformers import AutoformerConfig, AutoformerForPrediction
 
@@ -600,7 +601,7 @@ test_dataloader = create_test_dataloader(
 )
 ```
 
-At inference time, we will use the model's `generate()` method for predicting `prediction_length` steps into the future from the very last context window of each time series in the training set.  
+At inference time, we will use the model's `generate()` method for predicting `prediction_length` steps into the future from the very last context window of each time series in the training set.
 
 ```python
 from accelerate import Accelerator
@@ -627,10 +628,9 @@ for batch in test_dataloader:
     forecasts_.append(outputs.sequences.cpu().numpy())
 ```
 
-The model outputs a tensor of shape (`batch_size`, `number of samples`, `prediction length`, `input_size`). 
+The model outputs a tensor of shape (`batch_size`, `number of samples`, `prediction length`, `input_size`).
 
-In this case, we get `100` possible values for the next `24` hours for each of the  time series in the test dataloader batch which if you recall from above is `64`:
-
+In this case, we get `100` possible values for the next `24` hours for each of the time series in the test dataloader batch which if you recall from above is `64`:
 
 ```python
 forecasts_[0].shape
@@ -638,8 +638,7 @@ forecasts_[0].shape
 >>> (64, 100, 24)
 ```
 
-We'll stack them vertically, to get forecasts for all time-series in the test dataset: We have `7` rolling windows in the test set which is why we end up with a total of `7 * 862 = 6034` predictions:   
-
+We'll stack them vertically, to get forecasts for all time-series in the test dataset: We have `7` rolling windows in the test set which is why we end up with a total of `7 * 862 = 6034` predictions:
 
 ```python
 import numpy as np
@@ -668,9 +667,9 @@ for item_id, ts in enumerate(tqdm(test_dataset)):
     training_data = ts["target"][:-prediction_length]
     ground_truth = ts["target"][-prediction_length:]
     mase = mase_metric.compute(
-        predictions=forecast_median[item_id], 
-        references=np.array(ground_truth), 
-        training=np.array(training_data), 
+        predictions=forecast_median[item_id],
+        references=np.array(ground_truth),
+        training=np.array(training_data),
         periodicity=get_seasonality(freq))
     mase_metrics.append(mase["mase"])
 ```
@@ -684,7 +683,6 @@ print(f"Autoformer univariate MASE: {np.mean(mase_metrics):.3f}")
 ```
 
 To plot the prediction for any time series with respect to the ground truth test data, we define the following helper:
-
 
 ```python
 import matplotlib.dates as mdates
@@ -702,17 +700,17 @@ def plot(ts_index):
     ).to_timestamp()
 
     ax.plot(
-        index[-5*prediction_length:], 
+        index[-5*prediction_length:],
         test_ds[ts_index]["target"][-5*prediction_length:],
         label="actual",
     )
 
     plt.plot(
-        index[-prediction_length:], 
+        index[-prediction_length:],
         np.median(forecasts[ts_index], axis=0),
         label="median",
     )
-    
+
     plt.gcf().autofmt_xdate()
     plt.legend(loc="best")
     plt.show()
@@ -725,12 +723,10 @@ plot(4)
 ```
 
 ![png](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/blog/148_autoformer/output_44_0.png)
-    
 
 ## Evaluate on DLinear
 
 A probabilistic DLinear is implemented in `gluonts` and thus we can train and evaluate it relatively quickly here:
-
 
 ```python
 from gluonts.torch.model.d_linear.estimator import DLinearEstimator
@@ -741,7 +737,7 @@ estimator = DLinearEstimator(
     context_length=dataset.metadata.prediction_length*2,
     scaling=scaling,
     hidden_dimension=2,
-    
+
     batch_size=batch_size,
     num_batches_per_epoch=num_batches_per_epoch,
     trainer_kwargs=dict(max_epochs=epochs)
@@ -752,15 +748,15 @@ Train the model:
 
 ```python
 predictor = estimator.train(
-    training_data=train_dataset, 
-    cache_data=True, 
+    training_data=train_dataset,
+    cache_data=True,
     shuffle_buffer_length=1024
 )
 
 >>> INFO:pytorch_lightning.callbacks.model_summary:
       | Name  | Type         | Params
     ---------------------------------------
-    0 | model | DLinearModel | 4.7 K 
+    0 | model | DLinearModel | 4.7 K
     ---------------------------------------
     4.7 K     Trainable params
     0         Non-trainable params
@@ -817,33 +813,32 @@ plot_gluonts(4)
 
 ![png](https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/blog/148_autoformer/output_54_0.png)
 
-
 The `traffic` dataset has a distributional shift in the sensor patterns between weekdays and weekends. So what is going on here? Since the DLinear model has no capacity to incorporate covariates, in particular any date-time features, the context window we give it does not have enough information to figure out if the prediction is for the weekend or weekday. Thus, the model will predict the more common of the patterns, namely the weekdays leading to poorer performance on weekends. Of course, by giving it a larger context window, a linear model will figure out the weekly pattern, but perhaps there is a monthly or quarterly pattern in the data which would require bigger and bigger contexts.
 
 ## Conclusion
 
 How do Transformer-based models compare against the above linear baseline? The test set MASE metrics from the different models we have are below:
 
-|Dataset | 	 Transformer (uni.) |   	 Transformer (mv.)  | Informer (uni.)| Informer (mv.) | Autoformer (uni.) | DLinear |
-|:--:|:--:| :--:| :--:| :--:|  :--:|:-------:| 
-|`Traffic` 	| **0.876** | 1.046 | 0.924 | 1.131  | 0.910 |  0.965  |
+|  Dataset  | Transformer (uni.) | Transformer (mv.) | Informer (uni.) | Informer (mv.) | Autoformer (uni.) | DLinear |
+| :-------: | :----------------: | :---------------: | :-------------: | :------------: | :---------------: | :-----: |
+| `Traffic` |     **0.876**      |       1.046       |      0.924      |     1.131      |       0.910       |  0.965  |
 
 As one can observe, the [vanilla Transformer](https://huggingface.co/docs/transformers/model_doc/time_series_transformer) which we introduced last year gets the best results here. Secondly, multivariate models are typically _worse_ than the univariate ones, the reason being the difficulty in estimating the cross-series correlations/relationships. The additional variance added by the estimates often harms the resulting forecasts or the model learns spurious correlations. Recent papers like [CrossFormer](https://openreview.net/forum?id=vSVLM2j9eie) (ICLR 23) and [CARD](https://arxiv.org/abs/2305.12095) try to address this problem in Transformer models.
 Multivariate models usually perform well when trained on large amounts of data. However, when compared to univariate models, especially on smaller open datasets, the univariate models tend to provide better metrics. By comparing the linear model with equivalent-sized univariate transformers or in fact any other neural univariate model, one will typically get better performance.
 
-To summarize, Transformers are definitely far from being outdated when it comes to time-series forcasting! 
-Yet the availability of large-scale datasets is crucial for maximizing their potential. 
-Unlike in CV and NLP, the field of time series lacks publicly accessible large-scale datasets. 
-Most existing pre-trained models for time series are trained on small sample sizes from archives like [UCR and UEA](https://www.timeseriesclassification.com/), 
-which contain only a few thousands or even hundreds of samples. 
-Although these benchmark datasets have been instrumental in the progress of the time series community, 
+To summarize, Transformers are definitely far from being outdated when it comes to time-series forcasting!
+Yet the availability of large-scale datasets is crucial for maximizing their potential.
+Unlike in CV and NLP, the field of time series lacks publicly accessible large-scale datasets.
+Most existing pre-trained models for time series are trained on small sample sizes from archives like [UCR and UEA](https://www.timeseriesclassification.com/),
+which contain only a few thousands or even hundreds of samples.
+Although these benchmark datasets have been instrumental in the progress of the time series community,
 their limited sample sizes and lack of generality pose challenges for pre-training deep learning models.
 
-Therefore, the development of large-scale, generic time series datasets (like ImageNet in CV) is of the utmost importance. 
+Therefore, the development of large-scale, generic time series datasets (like ImageNet in CV) is of the utmost importance.
 Creating such datasets will greatly facilitate further research on pre-trained models specifically designed for time series analysis,
 and it will improve the applicability of pre-trained models in time series forecasting.
 
 ## Acknowledgements
+
 We express our appreciation to [Lysandre Debut](https://github.com/LysandreJik) and [Pedro Cuenca](https://github.com/pcuenca)
 their insightful comments and help during this project ❤️.
-
