@@ -1,4 +1,4 @@
-# POST-3 || BUSRA-3
+# POST - 3 || BUSRA - 3
 ---
 title: "Yes, Transformers are Effective for Time Series Forecasting (+ Autoformer)"
 thumbnail: /blog/assets/150_autoformer/thumbnail.png
